@@ -1,0 +1,23 @@
+[server]
+# 服务器配置
+addr = "127.0.0.1:9999"
+# 后续补充日志相关配置
+
+[[output]]
+name = "测试安卓"
+description = "安卓输出目录描述"
+base_path = "test"
+format = [".","v2/","v3/"]
+# 压缩包的格式,这里的文件必须跟format对应
+zip_format = [".","v1","v2"]
+format_limit = [".png",".svg"]
+
+[[output]]
+name = "测试IOS"
+description = "IOS输出目录描述IOS输出目录描述IOS输出目录描述IOS输出目录描述IOS输出目录描述IOS输出目录描述IOS输出目录描述IOS输出目录描述IOS输出目录描述"
+base_path = "test"
+format = ["vvv1/","vvv2/","vvv3/"]
+# 压缩包的格式,这里的文件必须跟format对应
+zip_format = ["hdpi","mdpi","xhdpi"]
+format_limit = [".png",".svg"]
+

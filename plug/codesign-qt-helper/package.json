@@ -1,0 +1,37 @@
+{
+  "name": "CodeSign 切图助手",
+  "version": "1.0.0",
+  "description": "下载切图时自动调用本地 qt 工具处理",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.254",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "autoprefixer": "^10.4.24",
+    "copy-webpack-plugin": "^12.0.0",
+    "css-loader": "^6.8.0",
+    "html-webpack-plugin": "^5.5.0",
+    "less": "^4.5.1",
+    "less-loader": "^12.3.1",
+    "postcss": "^8.5.6",
+    "postcss-loader": "^8.2.1",
+    "style-loader": "^3.3.0",
+    "tailwindcss": "^3.4.19",
+    "ts-loader": "^9.5.0",
+    "typescript": "^5.2.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "antd": "^6.3.0",
+    "axios": "^1.13.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.13.0"
+  }
+}

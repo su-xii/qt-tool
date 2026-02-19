@@ -1,0 +1,138 @@
+use std::collections::HashMap;
+use std::fs;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+use anyhow::Result;
+use zip::ZipArchive;
+use crate::cli::Cli;
+use crate::server::config::OutputItem;
+
+/// 抽象运行行为
+pub trait Handler{
+    fn run(cli :&Cli) -> impl Future<Output = Result<()>> + Send;
+}
+
+
+// 解压文件,name包含后缀eg:my.png
+// 来到哦这个函数，说明项目已经正常启动了，config也通过了校验，可以完全信任
+pub fn handle_unzip_file(zip_path:&Path, name:&str,output_config:&OutputItem) -> Result<()>{
+    // 检验zip文件
+    check_zip_file(zip_path).map_err(|e|anyhow::anyhow!(e))?;
+
+    // 校验目录是否已存在
+    check_file_exists(output_config,name).map_err(|e|anyhow::anyhow!(e))?;
+
+    let file = File::open(zip_path)?;
+    let mut archive = ZipArchive::new(file).map_err(|_|anyhow::anyhow!("无效的压缩包格式"))?;
+
+    // 收集文件，过滤目录
+    let mut files = Vec::new();
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        if file.is_file(){
+            files.push(file.name().to_string());
+        }
+    }
+
+    // 映射name -》 file
+    let mut name_file_map = HashMap::new();
+    for format_path in &output_config.zip_format{
+        let mut tmp = false;
+        for file in &files{
+            // println!("{:?}   ->   {:?}",format_path,file);
+            if matches_parent_dir(format_path,file,&mut name_file_map){
+                tmp = true;
+                break;
+            }
+        }
+        if !tmp{ anyhow::bail!(format!("ZIP 文件内容格式与配置文件({})不符合", output_config.name))}
+    }
+
+    // 将压缩包解压到指定目录
+    for i in 0..output_config.format.len(){
+        let output_path_str = format!("{}/{}/{}",&output_config.base_path,&output_config.format[i],name);
+        let output_path = Path::new(&output_path_str);
+        // 服务器启动就会验证base_path是否存在，所以只需要验证base_path后面的目录是否存在即可
+        // 不存在就创建全部的父级目录
+        if let Some(parent) = output_path.parent(){
+            fs::create_dir_all(parent)?;
+        }
+
+        // 这里能保证肯定可以从map中拿到文件名,直接unwrap
+        let file_name = &output_config.zip_format[i];
+        let mut file = archive.by_name(name_file_map.get(file_name).unwrap())?;
+
+        // 有多少读多少
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+        fs::write(output_path,contents)?
+    }
+
+    Ok(())
+}
+
+// 校验是否已经存在目标文件
+pub fn check_file_exists(output_config:&OutputItem,name:&str) -> Result<(),String>{
+    for format in &output_config.format{
+        let output_path_str = format!("{}/{}/{}",&output_config.base_path,format,name);
+        let output_path = Path::new(&output_path_str);
+        if output_path.exists(){
+            return Err(format!("文件已存在: {}", output_path.display()).into());
+        }
+    }
+    Ok(())
+}
+
+
+// 校验zip文件是否存在
+fn check_zip_file(zip_path:&Path) -> Result<(),String>{
+    if !zip_path.exists(){
+        return Err(format!("ZIP 文件不存在: {}", zip_path.display()).into());
+    }
+    Ok(())
+}
+
+
+// 辅助函数，判断一个路径是否属于另一个路径
+fn matches_parent_dir(parent: &str, file: &str,map:&mut HashMap<String,String>) -> bool {
+    let child = Path::new(file);
+    if parent == "." {
+        // 只有当 child 没有父目录（即直接是文件名）时才匹配
+        return if child.parent().is_none() || child.parent().unwrap() == Path::new("") {
+            map.insert(parent.to_string(),file.to_string());
+            true
+        } else {
+            false
+        }
+    }
+
+    // 遍历 child 的所有父目录（包括自身目录）
+    for ancestor in child.ancestors() {
+        // 如果 ancestor 是根目录或空，跳过
+        if let Some(name) = ancestor.file_name() {
+            if name == parent {
+                map.insert(parent.to_string(),file.to_string());
+                return true;
+            }
+        }
+    }
+    false
+}
+
+
+#[test]
+fn test_unzip_file(){
+    let zip_path = Path::new("test/test.zip");
+    let name = "my.png";
+    let item = OutputItem{
+        name: "测试名字".to_string(),
+        description: "描述哈哈哈".to_string(),
+        base_path: "test".to_string(),
+        format: vec![String::from("v1"),String::from("v2"),String::from("v3")],
+        zip_format: vec![String::from("hdpi"),String::from("mdpi"),String::from("xhdpi")]/*.iter().map(|e|format!("{}/h5_head_theme_text.png",e)).collect()*/,
+        // format: vec![String::from("vv1"),String::from("vv2"),String::from("vv3")],
+        // zip_format: vec![String::from("."),String::from("v1"),String::from("v2")],
+    };
+    handle_unzip_file(zip_path,name,&item).unwrap();
+}
