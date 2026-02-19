@@ -4,6 +4,7 @@ import {getConfig} from "./store/config-store";
 import {getHistoryList, HistoryItem, HistoryList, saveHistoryList} from "./store/history-sotre";
 
 
+
 // 定义下载任务类型
 type fn = () => void;
 
@@ -31,6 +32,9 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.downloads.onCreated.addListener((downloadItem) => {
+    console.log("download url",downloadItem.url)
+    if(!downloadItem.url.includes("codesign.qq.com")) return
+
     console.log('下载任务被创建:', downloadItem.id);
     // 加入队列中
     downloadQueue[downloadItem.id] = {
@@ -56,6 +60,7 @@ async function showDialog(downloadId: number){
 
 chrome.downloads.onChanged.addListener((downloadDelta) => {
     const downloadId = downloadDelta.id;
+    if(!downloadQueue[downloadId]) return
     // 安全地获取文件名
     if (downloadDelta.filename && downloadDelta.filename.current) downloadQueue[downloadId].filePath = downloadDelta.filename.current
     if (!(downloadDelta.state && downloadDelta.state.current)) return;
@@ -151,4 +156,15 @@ chrome.runtime.onMessage.addListener((message:PopupMessage, sender, sendResponse
     console.log("收到了弹窗消息：",message)
     processPopupRequest(message)
     // sendResponse({})
-});
+})
+
+
+// 只对指定网站可用
+chrome.tabs.onActivated.addListener(async ({tabId})=>{
+    const tab = await chrome.tabs.get(tabId);
+    console.log("onActivated tab:",tab)
+    const ok = tab.url?.includes("codesign.qq.com");
+    ok ? await chrome.action.enable(tabId)
+        : await chrome.action.disable(tabId);
+})
+

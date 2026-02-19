@@ -17,9 +17,10 @@ pub trait Handler{
 // 解压文件,name包含后缀eg:my.png
 // 来到哦这个函数，说明项目已经正常启动了，config也通过了校验，可以完全信任
 pub fn handle_unzip_file(zip_path:&Path, name:&str,output_config:&OutputItem) -> Result<()>{
+    // 校验文件名
+    check_name_limit(name,&output_config).map_err(|e|anyhow::anyhow!(e))?;
     // 检验zip文件
     check_zip_file(zip_path).map_err(|e|anyhow::anyhow!(e))?;
-
     // 校验目录是否已存在
     check_file_exists(output_config,name).map_err(|e|anyhow::anyhow!(e))?;
 
@@ -85,6 +86,14 @@ pub fn check_file_exists(output_config:&OutputItem,name:&str) -> Result<(),Strin
 }
 
 
+// 校验文件名后缀限制
+fn check_name_limit(name:&str,output_config:&OutputItem) -> Result<(),String>{
+    match output_config.format_limit.iter().find(|e| name.ends_with(*e)) {
+        None => Err(format!("文件名格式不正确: {}", name).into()),
+        Some(_) => Ok(())
+    }
+}
+
 // 校验zip文件是否存在
 fn check_zip_file(zip_path:&Path) -> Result<(),String>{
     if !zip_path.exists(){
@@ -94,45 +103,88 @@ fn check_zip_file(zip_path:&Path) -> Result<(),String>{
 }
 
 
+
 // 辅助函数，判断一个路径是否属于另一个路径
-fn matches_parent_dir(parent: &str, file: &str,map:&mut HashMap<String,String>) -> bool {
-    let child = Path::new(file);
-    if parent == "." {
-        // 只有当 child 没有父目录（即直接是文件名）时才匹配
-        return if child.parent().is_none() || child.parent().unwrap() == Path::new("") {
-            map.insert(parent.to_string(),file.to_string());
-            true
-        } else {
-            false
+fn matches_parent_dir(
+    parent: &str,
+    file: &str,
+    map: &mut HashMap<String, String>,
+) -> bool {
+
+    let rule = Path::new(parent);
+    let file_path = Path::new(file);
+
+    let filename = match file_path.file_name().and_then(|s| s.to_str()) {
+        Some(v) => v,
+        None => return false,
+    };
+
+    // ---------- 解析规则 ----------
+    let mut depth = 0usize;
+    let mut suffix: Option<&str> = None;
+
+    if parent.contains("**") {
+        // wildcard 模式
+        if let Some(idx) = parent.find("**") {
+            suffix = Some(&parent[idx + 2..]);
+            let dir = &parent[..idx];
+            depth = Path::new(dir)
+                .components()
+                .filter(|c| matches!(c, std::path::Component::Normal(_)))
+                .count();
+        }
+    } else {
+        // 普通目录模式
+        depth = rule
+            .components()
+            .filter(|c| matches!(c, std::path::Component::Normal(_)))
+            .count();
+    }
+
+    // ---------- 后缀匹配 ----------
+    if let Some(sfx) = suffix {
+        if !filename.ends_with(sfx) {
+            return false;
         }
     }
 
-    // 遍历 child 的所有父目录（包括自身目录）
-    for ancestor in child.ancestors() {
-        // 如果 ancestor 是根目录或空，跳过
-        if let Some(name) = ancestor.file_name() {
-            if name == parent {
-                map.insert(parent.to_string(),file.to_string());
-                return true;
-            }
-        }
+    // ---------- 深度匹配 ----------
+    let ancestors: Vec<_> = file_path.ancestors().collect();
+
+    if depth >= ancestors.len() {
+        return false;
     }
+
+    // depth=0 表示同级
+    let target = ancestors[depth];
+
+    if target.file_name().is_some() || depth == 0 {
+        map.insert(parent.to_string(), file.to_string());
+        return true;
+    }
+
     false
 }
 
 
-#[test]
-fn test_unzip_file(){
-    let zip_path = Path::new("test/test.zip");
-    let name = "my.png";
-    let item = OutputItem{
-        name: "测试名字".to_string(),
-        description: "描述哈哈哈".to_string(),
-        base_path: "test".to_string(),
-        format: vec![String::from("v1"),String::from("v2"),String::from("v3")],
-        zip_format: vec![String::from("hdpi"),String::from("mdpi"),String::from("xhdpi")]/*.iter().map(|e|format!("{}/h5_head_theme_text.png",e)).collect()*/,
-        // format: vec![String::from("vv1"),String::from("vv2"),String::from("vv3")],
-        // zip_format: vec![String::from("."),String::from("v1"),String::from("v2")],
-    };
-    handle_unzip_file(zip_path,name,&item).unwrap();
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    #[test]
+    fn test_unzip_file(){
+        let zip_path = Path::new("test/test.zip");
+        let name = "my.png";
+        let item = OutputItem{
+            name: "测试名字".to_string(),
+            description: "描述哈哈哈".to_string(),
+            base_path: "test".to_string(),
+            format: vec![String::from("v1"), String::from("v2"), String::from("v3")],
+            zip_format: vec![String::from("hdpi"), String::from("mdpi"), String::from("xhdpi")]/*.iter().map(|e|format!("{}/h5_head_theme_text.png",e)).collect()*/,
+            // format: vec![String::from("vv1"),String::from("vv2"),String::from("vv3")],
+            // zip_format: vec![String::from("."),String::from("v1"),String::from("v2")],
+            format_limit: vec![],
+        };
+        handle_unzip_file(zip_path,name,&item).unwrap();
+    }
 }

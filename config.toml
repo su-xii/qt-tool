@@ -21,3 +21,32 @@ format = ["vvv1/","vvv2/","vvv3/"]
 zip_format = ["hdpi","mdpi","xhdpi"]
 format_limit = [".png",".svg"]
 
+[[output]]
+name = "测试codesign 安卓"
+description = "测试codesign功能是否正常"
+base_path = "test"
+format = ["v1","v2","v3"]
+# 压缩包的格式,这里的文件必须跟format对应
+zip_format = ["mipmap-mdpi/","mipmap-hdpi/","mipmap-xhdpi/"]
+format_limit = [".png",".svg"]
+
+[[output]]
+name = "测试codesign WEB"
+description = "测试codesign功能是否正常"
+base_path = "test"
+format = ["web-v1","web-v2"]
+# 压缩包的格式,这里的文件必须跟format对应
+# 有limit了，这里的后缀其实也可以不用了，从配置里取就行了,下个版本可以考虑优化 todo
+zip_format = ["./**.png","./**@2x.png"]
+format_limit = [".png",".svg"]
+
+[[output]]
+name = "测试codesign IOS"
+description = "测试codesign功能是否正常"
+base_path = "test"
+format = ["ios-v1","ios-v2","ios-v3"]
+# 压缩包的格式,这里的文件必须跟format对应
+zip_format = ["./**.png","./**@2x.png","./**@3x.png"]
+format_limit = [".png",".svg"]
+
+

@@ -6,7 +6,21 @@
   "permissions": [
     "storage",
     "downloads",
-    "notifications"
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://codesign.qq.com/*",
+    "*://*.codesign.qq.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://codesign.qq.com/*",
+        "*://*.codesign.qq.com/*"
+      ],
+      "js": ["content.js"]
+    }
   ],
   "background": {
     "service_worker": "background.js",
