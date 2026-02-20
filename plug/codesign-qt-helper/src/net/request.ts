@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import {getConfig} from "../store/config-store";
 
 // 响应数据结构
 export interface ApiResponse<T = any> {
@@ -21,12 +22,8 @@ const instance = axios.create({
   },
 });
 
-// 请求拦截器,暂时不需要
-instance.interceptors.request.use((config) => {
-  // const token = localStorage.getItem('token');
-  // if (token) {
-  //   config.headers.Authorization = `Bearer ${token}`;
-  // }
+// 请求拦截器
+instance.interceptors.request.use(async (config) => {
   return config;
 });
 
@@ -48,14 +45,23 @@ instance.interceptors.response.use(
     }
 );
 
+const handleConfigServer = async ()=>{
+    const config = await getConfig();
+    if(config?.serverAddr){
+        instance.defaults.baseURL = config.serverAddr;
+    }
+}
+
 // GET 方法
 export async function get<T = any>(url: string, config?: RequestConfig):Promise<T> {
+  await handleConfigServer();
   const res = await instance.get<ApiResponse<T>>(url, config);
   return res.data.data;
 }
 
 // POST 方法
 export async function post<T = any>(url: string, data?: any, config?: RequestConfig) :Promise<T> {
+  await handleConfigServer();
   const res = await instance.post<ApiResponse<T>>(url, data, config);
   return res.data.data;
 }

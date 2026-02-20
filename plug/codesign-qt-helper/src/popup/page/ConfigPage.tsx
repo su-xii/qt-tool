@@ -1,7 +1,8 @@
 import React, {useEffect, useState} from "react";
 import {getConfig, saveConfig,Config} from "../../store/config-store";
-import {Button, message, InputNumber} from "antd";
+import {Button, message, InputNumber, Input} from "antd";
 import {useNavigate} from "react-router-dom";
+import {test} from "../../net/api";
 
 interface PopupSize{
     height?:number,
@@ -10,17 +11,29 @@ interface PopupSize{
 
 export default function ConfigPage(){
     const [popupSize,setPopupSize] = useState<PopupSize>({})
-    // const [message,setMessage] = useState("")
+    const [addr,setAddr] = useState("")
 
     const [messageApi, contextHolder] = message.useMessage();
     const navigate = useNavigate()
 
     const toBack = ()=> navigate(-1)
-    const save = ()=>{
+    const testConnect = (addr:string)=>{
+        getConfig().then((config)=>{
+            config = config ?? {}
+            config.serverAddr = addr
+            saveConfig(config).then(()=>{
+                test()
+                    .then(()=>messageApi.success("连接成功"))
+                    .catch((_)=>messageApi.error("连接失败"))
+            })
+        })
+    }
+    const save = (popupSize:PopupSize,addr:string)=>{
         getConfig().then((config)=>{
             config = config ?? {}
             config.popupWidth = popupSize.width
             config.popupHeight = popupSize.height
+            config.serverAddr = addr
             saveConfig(config)
                 .then(() => messageApi.open({
                     type: 'success',
@@ -36,6 +49,7 @@ export default function ConfigPage(){
                 height:config.popupHeight,
                 width:config.popupWidth
             })
+            setAddr(config.serverAddr ?? "http://localhost:9999")
         }
         getConfig().then(handleConfig)
     },[])
@@ -47,20 +61,26 @@ export default function ConfigPage(){
             <div className="flex flex-row w-full mt-2 justify-center items-center">
                 弹窗宽度：
                 <InputNumber value={popupSize.width} className="flex flex-1" min={400} max={1000} onChange={(value) => {
-                    if(value){
-                        setPopupSize({...popupSize,width:value})
+                    if (value) {
+                        setPopupSize({...popupSize, width: value})
                     }
-                }} />
+                }}/>
             </div>
             <div className="flex flex-row w-full mt-2 justify-center items-center">
                 弹窗高度：
-                <InputNumber value={popupSize.height} className="flex flex-1" min={240} max={1000} onChange={(value) => {
-                    if(value){
-                        setPopupSize({...popupSize,height:value})
-                    }
-                }} />
+                <InputNumber value={popupSize.height} className="flex flex-1" min={240} max={1000}
+                             onChange={(value) => {
+                                 if (value) {
+                                     setPopupSize({...popupSize, height: value})
+                                 }
+                             }}/>
             </div>
-            <Button className="mt-2" block onClick={save}>保存配置</Button>
+            <div className="flex flex-row w-full mt-2 justify-center items-center">
+                服务地址：
+                <Input value={addr} className="flex flex-1" onChange={(value)=> setAddr(value.target.value)}/>
+            </div>
+            <Button className="mt-2" block onClick={()=>testConnect(addr)}>测试连接</Button>
+            <Button className="mt-2" block onClick={()=>save(popupSize,addr)}>保存配置</Button>
             <Button className="mt-2 mb-2" onClick={toBack}>返回上级</Button>
         </div>
     </>)

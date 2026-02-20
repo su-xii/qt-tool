@@ -1,6 +1,11 @@
 import {get,post} from "./request"
 import {ConfigsResponse} from "./reponse"
 
+
+export function test():Promise<void>{
+    return get<void>("/process/test")
+}
+
 export function getConfigList():Promise<ConfigsResponse[]>{
     return get<Array<ConfigsResponse>>("/process/configs")
 }

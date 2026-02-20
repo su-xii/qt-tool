@@ -2,6 +2,7 @@ const CONFIG_KEY = 'config'
 
 export interface Config{
     configIndex?:number,
+    serverAddr?:string,
     popupHeight?:number,
     popupWidth?:number
 }

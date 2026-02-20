@@ -38,7 +38,9 @@ pub fn handle_unzip_file(zip_path:&Path, name:&str,output_config:&OutputItem) ->
 
     // 映射name -》 file
     let mut name_file_map = HashMap::new();
-    for format_path in &output_config.zip_format{
+    let mut zip_format = output_config.zip_format.clone();
+    zip_format.sort_by(|o1,o2|o2.len().cmp(&o1.len()));
+    for format_path in &zip_format{
         let mut tmp = false;
         for file in &files{
             // println!("{:?}   ->   {:?}",format_path,file);
@@ -173,6 +175,10 @@ mod tests{
     use super::*;
     #[test]
     fn test_unzip_file(){
+        // let mut list = [".png","@2x.png","@3x.png"];
+        // list.sort_by(|o1,o2|o2.len().cmp(&o1.len()));
+        // println!("{:?}",list);
+        // return;
         let zip_path = Path::new("test/test.zip");
         let name = "my.png";
         let item = OutputItem{

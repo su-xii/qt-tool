@@ -5,7 +5,7 @@ use crate::server::config::{OutputItem, ServerConfig};
 use crate::server::router::user::UserRouter;
 use crate::server::router::{combine_routers, ProcessRouter};
 use axum::Router;
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::SocketAddrV4;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -21,6 +21,11 @@ impl Handler for ServerHandler {
         let config = ServerConfig::load_form_file(cli.config())?;
         config.validate().map_err(|e|anyhow::anyhow!(e))?;
 
+        // 校验解析服务地址
+        let addr = config.server.addr.parse::<SocketAddrV4>()
+            .map_err(|e|anyhow::anyhow!("{}",e))?;
+        println!("服务启动在：{}",addr);
+
         // 校验配置目录
         for output_item in &config.output{
             check_target_dir(output_item).map_err(|e|anyhow::anyhow!(e))?;
@@ -28,7 +33,7 @@ impl Handler for ServerHandler {
 
         // 全局状态
         let state = Arc::new(AppState::new(config));
-        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(0,0,0,0,),9999)).await?;
+        let listener = TcpListener::bind(addr).await?;
 
         // 组合路由
         let app = combine_routers(Router::new(),vec![
@@ -51,14 +56,20 @@ fn check_target_dir(output_config:&OutputItem) -> anyhow::Result<(), String> {
 }
 
 
-#[test]
-fn test_check(){
-    let item = OutputItem{
-        name: "测试名字".to_string(),
-        description: "描述哈哈哈".to_string(),
-        base_path: "test".to_string(),
-        format: vec![String::from("vv1"),String::from("vv2"),String::from("vv3")],
-        zip_format: vec![String::from("."),String::from("v1"),String::from("v2")],
-    };
-    check_target_dir(&item).unwrap();
+#[cfg(test)]
+mod tests{
+    use super::*;
+    #[test]
+    fn test_check(){
+        let item = OutputItem{
+            name: "测试名字".to_string(),
+            description: "描述哈哈哈".to_string(),
+            base_path: "test".to_string(),
+            format: vec![String::from("vv1"),String::from("vv2"),String::from("vv3")],
+            zip_format: vec![String::from("."),String::from("v1"),String::from("v2")],
+            format_limit:vec![]
+        };
+        check_target_dir(&item).unwrap();
+    }
+
 }
