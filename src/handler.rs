@@ -4,7 +4,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use anyhow::Result;
+use chrono::{Local};
+use qt_tool_key::generate_key;
 use zip::ZipArchive;
+use crate::record::{add_record, Record};
 use crate::cli::Cli;
 use crate::server::config::OutputItem;
 
@@ -17,62 +20,77 @@ pub trait Handler{
 // 解压文件,name包含后缀eg:my.png
 // 来到哦这个函数，说明项目已经正常启动了，config也通过了校验，可以完全信任
 pub fn handle_unzip_file(zip_path:&Path, name:&str,output_config:&OutputItem) -> Result<()>{
-    // 校验文件名
-    check_name_limit(name,&output_config).map_err(|e|anyhow::anyhow!(e))?;
-    // 检验zip文件
-    check_zip_file(zip_path).map_err(|e|anyhow::anyhow!(e))?;
-    // 校验目录是否已存在
-    check_file_exists(output_config,name).map_err(|e|anyhow::anyhow!(e))?;
+    let handler = || -> Result<()> {
+        // 校验文件名
+        check_name_limit(name,&output_config).map_err(|e|anyhow::anyhow!(e))?;
+        // 检验zip文件
+        check_zip_file(zip_path).map_err(|e|anyhow::anyhow!(e))?;
+        // 校验目录是否已存在
+        check_file_exists(output_config,name).map_err(|e|anyhow::anyhow!(e))?;
 
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file).map_err(|_|anyhow::anyhow!("无效的压缩包格式"))?;
+        let file = File::open(zip_path)?;
+        let mut archive = ZipArchive::new(file).map_err(|_|anyhow::anyhow!("无效的压缩包格式"))?;
 
-    // 收集文件，过滤目录
-    let mut files = Vec::new();
-    for i in 0..archive.len() {
-        let file = archive.by_index(i)?;
-        if file.is_file(){
-            files.push(file.name().to_string());
-        }
-    }
-
-    // 映射name -》 file
-    let mut name_file_map = HashMap::new();
-    let mut zip_format = output_config.zip_format.clone();
-    zip_format.sort_by(|o1,o2|o2.len().cmp(&o1.len()));
-    for format_path in &zip_format{
-        let mut tmp = false;
-        for file in &files{
-            // println!("{:?}   ->   {:?}",format_path,file);
-            if matches_parent_dir(format_path,file,&mut name_file_map){
-                tmp = true;
-                break;
+        // 收集文件，过滤目录
+        let mut files = Vec::new();
+        for i in 0..archive.len() {
+            let file = archive.by_index(i)?;
+            if file.is_file(){
+                files.push(file.name().to_string());
             }
         }
-        if !tmp{ anyhow::bail!(format!("ZIP 文件内容格式与配置文件({})不符合", output_config.name))}
-    }
 
-    // 将压缩包解压到指定目录
-    for i in 0..output_config.format.len(){
-        let output_path_str = format!("{}/{}/{}",&output_config.base_path,&output_config.format[i],name);
-        let output_path = Path::new(&output_path_str);
-        // 服务器启动就会验证base_path是否存在，所以只需要验证base_path后面的目录是否存在即可
-        // 不存在就创建全部的父级目录
-        if let Some(parent) = output_path.parent(){
-            fs::create_dir_all(parent)?;
+        // 映射name -》 file
+        let mut name_file_map = HashMap::new();
+        let mut zip_format = output_config.zip_format.clone();
+        zip_format.sort_by(|o1,o2|o2.len().cmp(&o1.len()));
+        for format_path in &zip_format{
+            let mut tmp = false;
+            for file in &files{
+                // println!("{:?}   ->   {:?}",format_path,file);
+                if matches_parent_dir(format_path,file,&mut name_file_map){
+                    tmp = true;
+                    break;
+                }
+            }
+            if !tmp{ anyhow::bail!(format!("ZIP 文件内容格式与配置文件({})不符合", output_config.name))}
         }
 
-        // 这里能保证肯定可以从map中拿到文件名,直接unwrap
-        let file_name = &output_config.zip_format[i];
-        let mut file = archive.by_name(name_file_map.get(file_name).unwrap())?;
+        // 将压缩包解压到指定目录
+        for i in 0..output_config.format.len(){
+            let output_path_str = format!("{}/{}/{}",&output_config.base_path,&output_config.format[i],name);
+            let output_path = Path::new(&output_path_str);
+            // 服务器启动就会验证base_path是否存在，所以只需要验证base_path后面的目录是否存在即可
+            // 不存在就创建全部的父级目录
+            if let Some(parent) = output_path.parent(){
+                fs::create_dir_all(parent)?;
+            }
 
-        // 有多少读多少
-        let mut contents = Vec::new();
-        file.read_to_end(&mut contents)?;
-        fs::write(output_path,contents)?
+            // 这里能保证肯定可以从map中拿到文件名,直接unwrap
+            let file_name = &output_config.zip_format[i];
+            let mut file = archive.by_name(name_file_map.get(file_name).unwrap())?;
+
+            // 有多少读多少
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents)?;
+            fs::write(output_path,contents)?
+        }
+
+        Ok(())
+    };
+
+    match handler() {
+        Ok(ok) => { record(true);Ok(ok) }
+        Err(e) => { record(false);Err(e) }
     }
+}
 
-    Ok(())
+fn record(is_success:bool){
+    // 获取时间
+    let time = Local::now();
+    if let Err(_e) = add_record(Record::new(generate_key(), is_success, time.timestamp_millis())){
+        // todo 失败日志
+    }
 }
 
 // 校验是否已经存在目标文件

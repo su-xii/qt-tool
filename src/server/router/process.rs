@@ -5,7 +5,7 @@ use axum::extract::{Query, State};
 use dto::ConfigsResponse;
 use crate::server::app_state::{SharedState};
 use crate::server::router::AppRouter;
-use crate::server::util::result_util::ResultUtil;
+use crate::util::result_util::ResultUtil;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use crate::handler::{check_file_exists, handle_unzip_file};

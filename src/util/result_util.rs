@@ -1,9 +1,9 @@
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use bytes::{BufMut, BytesMut};
 
-#[derive(Serialize)]
+#[derive(Serialize,Deserialize,Debug)]
 pub struct ResultUtil<T = ()>{
     code:i32,
     message:String,

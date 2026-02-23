@@ -3,7 +3,7 @@ mod dto;
 use crate::server::app_state::SharedState;
 use crate::server::router::user::dto::response::UserResponse;
 use crate::server::router::AppRouter;
-use crate::server::util::result_util::ResultUtil;
+use crate::util::result_util::ResultUtil;
 use axum::{routing::get, Json, Router};
 use axum::routing::post;
 use crate::server::router::user::dto::request::UserRequest;

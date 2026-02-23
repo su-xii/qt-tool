@@ -10,13 +10,17 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
+use crate::{logger, record};
 
 pub struct ServerHandler;
 
 impl Handler for ServerHandler {
     async fn run(cli: &Cli) -> anyhow::Result<()> {
-        println!("以服务器模式运行了");
-
+        // 开启日志
+        logger::init()?;
+        // 启动的同时，在后台上传记录
+        tokio::spawn(record::init());
+        tracing::info!("服务器模式启动");
         // 加载配置
         let config = ServerConfig::load_form_file(cli.config())?;
         config.validate().map_err(|e|anyhow::anyhow!(e))?;
@@ -24,11 +28,11 @@ impl Handler for ServerHandler {
         // 校验解析服务地址
         let addr = config.server.addr.parse::<SocketAddrV4>()
             .map_err(|e|anyhow::anyhow!("{}",e))?;
-        println!("服务启动在：{}",addr);
+        tracing::info!("服务运行在：{}",addr);
 
         // 校验配置目录
         for output_item in &config.output{
-            check_target_dir(output_item).map_err(|e|anyhow::anyhow!(e))?;
+            check_target_dir(output_item).map_err(|e| anyhow::anyhow!(e))?;
         }
 
         // 全局状态
