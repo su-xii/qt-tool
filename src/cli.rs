@@ -29,6 +29,12 @@ pub struct Cli {
     /// 指定输出目录（默认为当前目录）
     #[arg(short = 'p', long = "output-dir", value_name = "DIR")]
     output_dir: Option<PathBuf>,
+
+    /// 输出的文件目录列表。
+    /// 格式: [v1, v2, v3] 或 [v1 v2 v3]
+    /// 示例: -o "[small, medium, large]"
+    #[arg(short = 'o', long = "outputs",default_value_t = String::from(""))]
+    pub output_dirs_raw: String
 }
 
 
@@ -39,6 +45,50 @@ fn parse_output_name(s: &str) -> Result<String, String> {
         Ok(s.to_string())
     }
 }
+
+/// 自定义解析器：将 "[a, b, c]" 或 "[a b c]" 解析为 Vec<String>
+fn parse_string_array(s: &str) -> Result<Vec<String>, String> {
+    let s = s.trim();
+
+    // 检查是否以 [ 开头和 ] 结尾
+    if !s.starts_with('[') || !s.ends_with(']') {
+        return Err("格式错误：参数必须以 [ 开头并以 ] 结尾。\n例如: -o \"[v1, v2, v3]\"".to_string());
+    }
+
+    // 去掉方括号
+    let content = &s[1..s.len() - 1];
+
+    // 如果内容为空，返回空数组
+    if content.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 分割字符串：支持逗号分隔 或 空格分隔
+    let items: Vec<String> = if content.contains(',') {
+        content.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else {
+        content.split_whitespace()
+            .map(|s| s.to_string())
+            .collect()
+    };
+
+    // 清理每个元素周围的引号
+    let cleaned_items = items.into_iter().map(|item| {
+        let trimmed = item.trim();
+        if (trimmed.starts_with('"') && trimmed.ends_with('"')) ||
+            (trimmed.starts_with('\'') && trimmed.ends_with('\'')) {
+            trimmed[1..trimmed.len() - 1].to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }).collect();
+
+    Ok(cleaned_items)
+}
+
 
 impl Cli{
     pub fn is_server_mode(&self) -> bool{
@@ -59,6 +109,10 @@ impl Cli{
 
     pub fn config(&self) -> String{
         self.config.clone()
+    }
+
+    pub fn output_dirs(&self) -> Vec<String>{
+        parse_string_array(&self.output_dirs_raw).expect("output_dirs参数错误")
     }
 
     pub async fn run(&self) -> Result<()>{

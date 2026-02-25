@@ -7,7 +7,7 @@ pub async fn upload_record(records:Vec<Record>) -> Result<Vec<Record>>{
     let client = reqwest::Client::new();
     async fn upload(client:&reqwest::Client,record:Record) -> Result<()>{
         let _ = client
-            .post("http://localhost:3000/record/add") // todo 后期要修正为服务端地址
+            .post("http://qt.suxii.cn/api/record/add")
             .json(&record)
             .send()
             .await?

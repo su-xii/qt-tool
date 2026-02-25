@@ -2,7 +2,6 @@ use crate::cli::Cli;
 use crate::handler::Handler;
 use crate::server::app_state::AppState;
 use crate::server::config::{OutputItem, ServerConfig};
-use crate::server::router::user::UserRouter;
 use crate::server::router::{combine_routers, ProcessRouter};
 use axum::Router;
 use std::net::SocketAddrV4;
@@ -41,7 +40,6 @@ impl Handler for ServerHandler {
 
         // 组合路由
         let app = combine_routers(Router::new(),vec![
-           Box::new(UserRouter),
            Box::new(ProcessRouter)
         ]).with_state(state).layer(CorsLayer::permissive());
 

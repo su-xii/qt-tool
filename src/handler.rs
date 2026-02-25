@@ -88,8 +88,8 @@ pub fn handle_unzip_file(zip_path:&Path, name:&str,output_config:&OutputItem) ->
 fn record(is_success:bool){
     // 获取时间
     let time = Local::now();
-    if let Err(_e) = add_record(Record::new(generate_key(), is_success, time.timestamp_millis())){
-        // todo 失败日志
+    if let Err(e) = add_record(Record::new(generate_key(), is_success, time.timestamp_millis())){
+        tracing::warn!("记录失败: {}", e)
     }
 }
 

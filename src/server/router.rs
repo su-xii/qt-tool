@@ -1,5 +1,4 @@
 mod process;
-pub mod user;
 pub use process::ProcessRouter;
 
 use axum::Router;
