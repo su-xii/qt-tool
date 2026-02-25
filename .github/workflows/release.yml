@@ -1,0 +1,116 @@
+name: Build and Release
+
+# === 1. 定义全局环境变量 ===
+env:
+  RELEASE_NAME: qt  # 定义变量，通常建议大写
+
+# === 关键：赋予工作流写入权限 ===
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ==========================
+  # 1. 构建 Job (矩阵并行)
+  # ==========================
+  build:
+    name: ${{ matrix.build }}-build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [linux, macos, windows]
+        include:
+          - build: linux
+            os: ubuntu-latest
+            rust: nightly
+            target: x86_64-unknown-linux-musl
+            # ✅ 引用方式：${{ env.RELEASE_NAME }}
+            archive-name: ${{ env.RELEASE_NAME }}-linux.tar.gz
+          - build: macos
+            os: macos-latest
+            rust: nightly
+            target: x86_64-apple-darwin
+            archive-name: ${{ env.RELEASE_NAME }}-macos.tar.gz
+          - build: windows
+            os: windows-latest
+            rust: nightly-x86_64-msvc
+            target: x86_64-pc-windows-msvc
+            archive-name: ${{ env.RELEASE_NAME }}-windows.tar.gz
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+
+      - name: Strip (Linux/Mac)
+        if: matrix.build == 'linux' || matrix.build == 'macos'
+        # ✅ 引用方式
+        run: strip "target/${{ matrix.target }}/release/${{ env.RELEASE_NAME }}"
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir archive
+          cd archive
+          if [ "${{ matrix.build }}" = "windows" ]; then
+            cp "../target/${{ matrix.target }}/release/${{ env.RELEASE_NAME }}.exe" ./
+            tar -czf "${{ matrix.archive-name }}" ${{ env.RELEASE_NAME }}.exe
+          else
+            cp "../target/${{ matrix.target }}/release/${{ env.RELEASE_NAME }}" ./
+            tar -czf "${{ matrix.archive-name }}" ${{ env.RELEASE_NAME }}
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive-name }}
+          path: archive/${{ matrix.archive-name }}
+          retention-days: 5
+
+  # ==========================
+  # 2. 发布 Job (串行，依赖构建完成)
+  # ==========================
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded_artifacts
+          # ✅ 这里也可以用环境变量匹配
+          pattern: ${{ env.RELEASE_NAME }}-*
+
+      - name: List downloaded files
+        run: ls -R downloaded_artifacts
+
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: downloaded_artifacts/**/*.tar.gz
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
