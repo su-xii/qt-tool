@@ -48,5 +48,5 @@ cargo run -- --run
 qt ./input.zip ok.png -p ./test -o "[v1,v2,v3]"
 ```
 
-开始使用 [快速开始](qt.sucii.cn/docs/guide/) 文档了解更多详情。
+开始使用 [快速开始](http://qt.suxii.cn/docs/guide/) 文档了解更多详情。
 插件使用 [浏览器插件](plug/README.md)
