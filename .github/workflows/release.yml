@@ -42,6 +42,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 仅在 Linux 环境下安装 musl 工具链
+      - name: Install Musl Tools (Linux)
+        if: matrix.build == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools musl-dev
+          
+          # 验证安装
+          x86_64-linux-musl-gcc --version
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
