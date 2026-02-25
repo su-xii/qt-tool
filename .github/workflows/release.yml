@@ -1,9 +1,5 @@
 name: Build and Release
 
-# === 1. 定义全局环境变量 ===
-env:
-  RELEASE_NAME: qt  # 定义变量，通常建议大写
-
 # === 关键：赋予工作流写入权限 ===
 permissions:
   contents: write
@@ -29,18 +25,17 @@ jobs:
             os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-musl
-            # ✅ 引用方式：${{ env.RELEASE_NAME }}
-            archive-name: ${{ env.RELEASE_NAME }}-linux.tar.gz
+            archive-name: qt-linux.tar.gz
           - build: macos
             os: macos-latest
             rust: nightly
             target: x86_64-apple-darwin
-            archive-name: ${{ env.RELEASE_NAME }}-macos.tar.gz
+            archive-name: qt-macos.tar.gz
           - build: windows
             os: windows-latest
             rust: nightly-x86_64-msvc
             target: x86_64-pc-windows-msvc
-            archive-name: ${{ env.RELEASE_NAME }}-windows.tar.gz
+            archive-name: qt-windows.tar.gz
       fail-fast: false
 
     steps:
@@ -60,8 +55,7 @@ jobs:
 
       - name: Strip (Linux/Mac)
         if: matrix.build == 'linux' || matrix.build == 'macos'
-        # ✅ 引用方式
-        run: strip "target/${{ matrix.target }}/release/${{ env.RELEASE_NAME }}"
+        run: strip "target/${{ matrix.target }}/release/qt"
 
       - name: Package
         shell: bash
@@ -69,11 +63,11 @@ jobs:
           mkdir archive
           cd archive
           if [ "${{ matrix.build }}" = "windows" ]; then
-            cp "../target/${{ matrix.target }}/release/${{ env.RELEASE_NAME }}.exe" ./
-            tar -czf "${{ matrix.archive-name }}" ${{ env.RELEASE_NAME }}.exe
+            cp "../target/${{ matrix.target }}/release/qt.exe" ./
+            tar -czf "${{ matrix.archive-name }}" qt.exe
           else
-            cp "../target/${{ matrix.target }}/release/${{ env.RELEASE_NAME }}" ./
-            tar -czf "${{ matrix.archive-name }}" ${{ env.RELEASE_NAME }}
+            cp "../target/${{ matrix.target }}/release/qt" ./
+            tar -czf "${{ matrix.archive-name }}" qt
           fi
 
       - name: Upload Artifact
@@ -81,34 +75,42 @@ jobs:
         with:
           name: ${{ matrix.archive-name }}
           path: archive/${{ matrix.archive-name }}
+          # 可选：保留期限，默认90天
           retention-days: 5
-
+  
   # ==========================
   # 2. 发布 Job (串行，依赖构建完成)
   # ==========================
   release:
     name: Create Release
-    needs: build
+    needs: build  # 关键：等待所有 build 任务完成
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 步骤 A: 下载所有构建产物
+      # download-artifact v4 会将每个 artifact 下载到以 artifact name 命名的文件夹中
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: downloaded_artifacts
-          # ✅ 这里也可以用环境变量匹配
-          pattern: ${{ env.RELEASE_NAME }}-*
+          # 如果不指定 pattern，默认下载当前 workflow 运行产生的所有 artifact
+          # 如果需要精确匹配，可以使用 pattern: 'qt-*'
 
+      # 调试：查看下载后的文件结构 (可选，失败时很有用)
       - name: List downloaded files
         run: ls -R downloaded_artifacts
 
+      # 步骤 B: 上传到 GitHub Release
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
+          # 指定要上传的文件路径
+          # 这里使用通配符匹配所有下载下来的压缩包
           files: downloaded_artifacts/**/*.tar.gz
+          
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
