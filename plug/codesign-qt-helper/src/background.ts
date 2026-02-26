@@ -2,8 +2,14 @@ import {process} from "./net/api"
 import {PopupMessage} from "./message";
 import {getConfig} from "./store/config-store";
 import {getHistoryList, HistoryItem, HistoryList, saveHistoryList} from "./store/history-sotre";
+import {TARGET_URL} from "./constant"
 
 
+// 初始化代码块
+async function main(){
+    console.log("初始化代码块执行了")
+    // await chrome.action.disable()
+}
 
 // 定义下载任务类型
 type fn = () => void;
@@ -31,9 +37,11 @@ chrome.runtime.onInstalled.addListener(() => {
     console.log('插件加载成功');
 });
 
-chrome.downloads.onCreated.addListener((downloadItem) => {
+chrome.downloads.onCreated.addListener(async (downloadItem) => {
     console.log("download url",downloadItem.url)
-    if(!downloadItem.url.includes("codesign.qq.com")) return
+    // 下载完成的不处理
+    if(!downloadItem.url.includes(TARGET_URL)) return
+    if(downloadItem.state === 'complete') return
 
     console.log('下载任务被创建:', downloadItem.id);
     // 加入队列中
@@ -43,7 +51,7 @@ chrome.downloads.onCreated.addListener((downloadItem) => {
         timestamp: Date.now(),
     };
     // 弹窗展示
-    const _ = showDialog(downloadItem.id)
+    await showDialog(downloadItem.id);
 });
 
 async function showDialog(downloadId: number){
@@ -162,9 +170,13 @@ chrome.runtime.onMessage.addListener((message:PopupMessage, sender, sendResponse
 // 只对指定网站可用
 chrome.tabs.onActivated.addListener(async ({tabId})=>{
     const tab = await chrome.tabs.get(tabId);
-    console.log("onActivated tab:",tab)
-    const ok = tab.url?.includes("codesign.qq.com");
-    ok ? await chrome.action.enable(tabId)
-        : await chrome.action.disable(tabId);
+    const ok = tab.url?.includes(TARGET_URL);
+    if(ok){
+        await chrome.action.enable(tabId)
+    }else {
+        await chrome.action.disable(tabId);
+    }
 })
 
+// 执行初始化代码
+const _ = main()
