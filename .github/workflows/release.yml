@@ -22,7 +22,6 @@ jobs:
             rust: nightly
             target: x86_64-unknown-linux-musl
             archive-name: qt-linux.tar.gz
-            # 升级到 Node.js 22 (当前 LTS) 或 24 (最新版)
             node-version: "22"
           - build: macos
             os: macos-latest
@@ -39,32 +38,37 @@ jobs:
       fail-fast: false
 
     steps:
-      # 升级到 checkout@v5 以支持 Node 24 环境
+      # 1. 检出代码
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
       # ==========================
-      # 1. 构建前端 (NPM)
+      # 2. 构建前端 (NPM)
       # ==========================
-      # 升级到 setup-node@v5，解决路径解析和缓存问题
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
-          # 确保路径相对于仓库根目录是正确的
-          cache-dependency-path: plug/codesign-qt-helper/package-lock.json
+          # 【重要修复】完全禁用缓存功能，避免因缺少 lock 文件导致路径解析错误
+          # 不再设置 cache 和 cache-dependency-path
 
       - name: Install Frontend Dependencies & Build
         working-directory: plug/codesign-qt-helper
         run: |
-          npm ci
+          echo "📦 Running npm i..."
+          npm i
+          
+          echo "🏗️ Running npm run build..."
           npm run build
+          
           echo "✅ Frontend build completed."
-          ls -la dist  # 验证 dist 目录已生成
+          ls -la dist
 
       # ==========================
-      # 2. 准备 Rust 环境
+      # 3. 准备 Rust 环境
       # ==========================
       - name: Install Musl Tools (Linux Only)
         if: matrix.build == 'linux'
@@ -73,8 +77,6 @@ jobs:
           sudo apt-get install -y musl-tools musl-dev cmake perl
           x86_64-linux-musl-gcc --version
 
-      # 推荐使用 dtolnay/rust-toolchain 替代 actions-rs/toolchain (后者已不再积极维护)
-      # 但为了最小化改动，这里暂时保留原逻辑，如果后续报错建议更换为 dtolnay/rust-toolchain@stable
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -84,7 +86,7 @@ jobs:
           target: ${{ matrix.target }}
 
       # ==========================
-      # 3. 构建 Rust 后端
+      # 4. 构建 Rust 后端
       # ==========================
       - name: Build Rust Backend
         run: cargo build --verbose --release --target ${{ matrix.target }}
@@ -94,7 +96,7 @@ jobs:
         run: strip "target/${{ matrix.target }}/release/qt"
 
       # ==========================
-      # 4. 打包归档 (Package)
+      # 5. 打包归档 (Package)
       # ==========================
       - name: Package Artifacts
         shell: bash
@@ -102,42 +104,46 @@ jobs:
           mkdir -p archive
           cd archive
 
-          # 定义二进制文件名和启动脚本
           if [ "${{ matrix.build }}" = "windows" ]; then
             BINARY="qt.exe"
-            SHELL_SCRIPT="run.bat"
+            SCRIPT_NAME="run.bat"
             cp "../target/${{ matrix.target }}/release/qt.exe" "./$BINARY"
-            cp "../$SHELL_SCRIPT" ./
           else
             BINARY="qt"
-            SHELL_SCRIPT="run.sh"
+            SCRIPT_NAME="run.sh"
             cp "../target/${{ matrix.target }}/release/qt" "./$BINARY"
-            cp "../$SHELL_SCRIPT" ./
-            chmod +x "$BINARY" "$SHELL_SCRIPT"
+            chmod +x "$BINARY"
+          fi
+          
+          cp "../$SCRIPT_NAME" "./$SCRIPT_NAME"
+          if [ "${{ matrix.build }}" != "windows" ]; then
+            chmod +x "./$SCRIPT_NAME"
           fi
 
-          # 复制配置文件和文档
-          cp ../config.toml ./
-          cp ../README.md ./
+          if [ -f "../config.toml" ]; then
+            cp ../config.toml ./
+          else
+            touch config.toml
+          fi
+          
+          if [ -f "../README.md" ]; then
+            cp ../README.md ./
+          fi
 
-          # 复制前端构建产物
           if [ -d "../plug/codesign-qt-helper/dist" ]; then
             cp -r ../plug/codesign-qt-helper/dist ./dist
-            echo "✅ Copied frontend assets from plug/codesign-qt-helper/dist"
+            echo "✅ Copied frontend assets"
           else
             echo "❌ Error: Frontend dist directory not found!"
             exit 1
           fi
 
-          # 创建压缩包
-          # 【修复点 3】修正了之前的 tar 命令错误：之前写的是 "SHELL" (字符串)，现在使用变量 $SHELL_SCRIPT
           echo "📦 Creating archive: ${{ matrix.archive-name }}"
-          tar -czf "${{ matrix.archive-name }}" "$BINARY" "$SHELL_SCRIPT" config.toml README.md dist
+          tar -czf "${{ matrix.archive-name }}" "$BINARY" "$SCRIPT_NAME" config.toml README.md dist
 
           echo "✅ Archive created successfully."
           ls -lh
 
-      # 使用最新的 upload-artifact
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
