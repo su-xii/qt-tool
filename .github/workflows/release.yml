@@ -22,34 +22,37 @@ jobs:
             rust: nightly
             target: x86_64-unknown-linux-musl
             archive-name: qt-linux.tar.gz
-            node-version: "20"
+            # 升级到 Node.js 22 (当前 LTS) 或 24 (最新版)
+            node-version: "22"
           - build: macos
             os: macos-latest
             rust: nightly
             target: x86_64-apple-darwin
             archive-name: qt-macos.tar.gz
-            node-version: "20"
+            node-version: "22"
           - build: windows
             os: windows-latest
             rust: nightly-x86_64-msvc
             target: x86_64-pc-windows-msvc
             archive-name: qt-windows.tar.gz
-            node-version: "20"
+            node-version: "22"
       fail-fast: false
 
     steps:
+      # 升级到 checkout@v5 以支持 Node 24 环境
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ==========================
       # 1. 构建前端 (NPM)
       # ==========================
+      # 升级到 setup-node@v5，解决路径解析和缓存问题
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
-          # 指定缓存依赖的目录，确保缓存命中
+          # 确保路径相对于仓库根目录是正确的
           cache-dependency-path: plug/codesign-qt-helper/package-lock.json
 
       - name: Install Frontend Dependencies & Build
@@ -70,6 +73,8 @@ jobs:
           sudo apt-get install -y musl-tools musl-dev cmake perl
           x86_64-linux-musl-gcc --version
 
+      # 推荐使用 dtolnay/rust-toolchain 替代 actions-rs/toolchain (后者已不再积极维护)
+      # 但为了最小化改动，这里暂时保留原逻辑，如果后续报错建议更换为 dtolnay/rust-toolchain@stable
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -100,14 +105,15 @@ jobs:
           # 定义二进制文件名和启动脚本
           if [ "${{ matrix.build }}" = "windows" ]; then
             BINARY="qt.exe"
-            SHELL="run.bat"
+            SHELL_SCRIPT="run.bat"
             cp "../target/${{ matrix.target }}/release/qt.exe" "./$BINARY"
-            cp "../$SHELL" ./
+            cp "../$SHELL_SCRIPT" ./
           else
             BINARY="qt"
-            SHELL="run.sh"
+            SHELL_SCRIPT="run.sh"
             cp "../target/${{ matrix.target }}/release/qt" "./$BINARY"
-            cp "../$SHELL" ./
+            cp "../$SHELL_SCRIPT" ./
+            chmod +x "$BINARY" "$SHELL_SCRIPT"
           fi
 
           # 复制配置文件和文档
@@ -115,8 +121,6 @@ jobs:
           cp ../README.md ./
 
           # 复制前端构建产物
-          # 源路径: plug/codesign-qt-helper/dist
-          # 目标路径: ./dist
           if [ -d "../plug/codesign-qt-helper/dist" ]; then
             cp -r ../plug/codesign-qt-helper/dist ./dist
             echo "✅ Copied frontend assets from plug/codesign-qt-helper/dist"
@@ -126,12 +130,14 @@ jobs:
           fi
 
           # 创建压缩包
+          # 【修复点 3】修正了之前的 tar 命令错误：之前写的是 "SHELL" (字符串)，现在使用变量 $SHELL_SCRIPT
           echo "📦 Creating archive: ${{ matrix.archive-name }}"
-          tar -czf "${{ matrix.archive-name }}" "$BINARY" "SHELL" config.toml README.md dist
+          tar -czf "${{ matrix.archive-name }}" "$BINARY" "$SHELL_SCRIPT" config.toml README.md dist
 
           echo "✅ Archive created successfully."
           ls -lh
 
+      # 使用最新的 upload-artifact
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -145,10 +151,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: downloaded_artifacts
 
