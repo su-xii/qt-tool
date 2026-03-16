@@ -21,6 +21,9 @@ pub fn init() -> Result<()>{
             .expect("打开日志文件失败")
     };
 
+    let time_format = time::format_description::parse("[hour]:[minute]:[second]")
+        .expect("format string should be valid!");
+
     let net_layer = fmt::layer()
         .with_writer(file_writer)
         .with_ansi(false)
@@ -34,11 +37,12 @@ pub fn init() -> Result<()>{
 
     let general_layer = fmt::layer()
         .with_writer(std::io::stdout)
-        .with_ansi(false)
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
+        .with_ansi(true) // 启用颜色
+        .with_timer(fmt::time::LocalTime::new(time_format))
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false)
         .with_level(true)
         .with_filter(GeneralFilter);
     layers.push(Box::new(general_layer));

@@ -27,7 +27,6 @@ impl Handler for ServerHandler {
         // 校验解析服务地址
         let addr = config.server.addr.parse::<SocketAddrV4>()
             .map_err(|e|anyhow::anyhow!("{}",e))?;
-        tracing::info!("服务运行在：{}",addr);
 
         // 校验配置目录
         for output_item in &config.output{
@@ -37,6 +36,8 @@ impl Handler for ServerHandler {
         // 全局状态
         let state = Arc::new(AppState::new(config));
         let listener = TcpListener::bind(addr).await?;
+
+        tracing::info!("服务运行在：http://{}",addr);
 
         // 组合路由
         let app = combine_routers(Router::new(),vec![

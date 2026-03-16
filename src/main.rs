@@ -3,5 +3,8 @@ use qt_tool::cli::Cli;
 use clap::Parser;
 #[tokio::main]
 async fn main() -> Result<()>{
-    Cli::parse().run().await
+    if let Err(e) = Cli::parse().run().await{
+        eprintln!("{}",e)
+    }
+    Ok(())
 }
