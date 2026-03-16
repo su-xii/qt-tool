@@ -65,7 +65,6 @@ jobs:
           npm run build
           
           echo "✅ Frontend build completed."
-          ls -la dist
 
       # ==========================
       # 3. 准备 Rust 环境
