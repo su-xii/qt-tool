@@ -1,6 +1,5 @@
 name: Build and Release
 
-# === 关键：赋予工作流写入权限 ===
 permissions:
   contents: write
 
@@ -8,12 +7,9 @@ on:
   workflow_dispatch: {}
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
-  # ==========================
-  # 1. 构建 Job (矩阵并行)
-  # ==========================
   build:
     name: ${{ matrix.build }}-build
     runs-on: ${{ matrix.os }}
@@ -26,30 +22,52 @@ jobs:
             rust: nightly
             target: x86_64-unknown-linux-musl
             archive-name: qt-linux.tar.gz
+            node-version: "20"
           - build: macos
             os: macos-latest
             rust: nightly
             target: x86_64-apple-darwin
             archive-name: qt-macos.tar.gz
+            node-version: "20"
           - build: windows
             os: windows-latest
             rust: nightly-x86_64-msvc
             target: x86_64-pc-windows-msvc
             archive-name: qt-windows.tar.gz
+            node-version: "20"
       fail-fast: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 仅在 Linux 环境下安装 musl 工具链
-      - name: Install Musl Tools (Linux)
+      # ==========================
+      # 1. 构建前端 (NPM)
+      # ==========================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          # 指定缓存依赖的目录，确保缓存命中
+          cache-dependency-path: plug/codesign-qt-helper/package-lock.json
+
+      - name: Install Frontend Dependencies & Build
+        working-directory: plug/codesign-qt-helper
+        run: |
+          npm ci
+          npm run build
+          echo "✅ Frontend build completed."
+          ls -la dist  # 验证 dist 目录已生成
+
+      # ==========================
+      # 2. 准备 Rust 环境
+      # ==========================
+      - name: Install Musl Tools (Linux Only)
         if: matrix.build == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools musl-dev
-          
-          # 验证安装
+          sudo apt-get install -y musl-tools musl-dev cmake perl
           x86_64-linux-musl-gcc --version
 
       - name: Install Rust
@@ -60,67 +78,87 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Build
+      # ==========================
+      # 3. 构建 Rust 后端
+      # ==========================
+      - name: Build Rust Backend
         run: cargo build --verbose --release --target ${{ matrix.target }}
 
-      - name: Strip (Linux/Mac)
+      - name: Strip Binary (Linux/Mac)
         if: matrix.build == 'linux' || matrix.build == 'macos'
         run: strip "target/${{ matrix.target }}/release/qt"
 
-      - name: Package
+      # ==========================
+      # 4. 打包归档 (Package)
+      # ==========================
+      - name: Package Artifacts
         shell: bash
         run: |
-          mkdir archive
+          mkdir -p archive
           cd archive
+
+          # 定义二进制文件名和启动脚本
           if [ "${{ matrix.build }}" = "windows" ]; then
-            cp "../target/${{ matrix.target }}/release/qt.exe" ./
-            tar -czf "${{ matrix.archive-name }}" qt.exe
+            BINARY="qt.exe"
+            SHELL="run.bat"
+            cp "../target/${{ matrix.target }}/release/qt.exe" "./$BINARY"
+            cp "../$SHELL" ./
           else
-            cp "../target/${{ matrix.target }}/release/qt" ./
-            tar -czf "${{ matrix.archive-name }}" qt
+            BINARY="qt"
+            SHELL="run.sh"
+            cp "../target/${{ matrix.target }}/release/qt" "./$BINARY"
+            cp "../$SHELL" ./
           fi
+
+          # 复制配置文件和文档
+          cp ../config.toml ./
+          cp ../README.md ./
+
+          # 复制前端构建产物
+          # 源路径: plug/codesign-qt-helper/dist
+          # 目标路径: ./dist
+          if [ -d "../plug/codesign-qt-helper/dist" ]; then
+            cp -r ../plug/codesign-qt-helper/dist ./dist
+            echo "✅ Copied frontend assets from plug/codesign-qt-helper/dist"
+          else
+            echo "❌ Error: Frontend dist directory not found!"
+            exit 1
+          fi
+
+          # 创建压缩包
+          echo "📦 Creating archive: ${{ matrix.archive-name }}"
+          tar -czf "${{ matrix.archive-name }}" "$BINARY" "SHELL" config.toml README.md dist
+
+          echo "✅ Archive created successfully."
+          ls -lh
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive-name }}
           path: archive/${{ matrix.archive-name }}
-          # 可选：保留期限，默认90天
           retention-days: 5
-  
-  # ==========================
-  # 2. 发布 Job (串行，依赖构建完成)
-  # ==========================
+
   release:
     name: Create Release
-    needs: build  # 关键：等待所有 build 任务完成
+    needs: build
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 步骤 A: 下载所有构建产物
-      # download-artifact v4 会将每个 artifact 下载到以 artifact name 命名的文件夹中
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: downloaded_artifacts
-          # 如果不指定 pattern，默认下载当前 workflow 运行产生的所有 artifact
-          # 如果需要精确匹配，可以使用 pattern: 'qt-*'
 
-      # 调试：查看下载后的文件结构 (可选，失败时很有用)
       - name: List downloaded files
         run: ls -R downloaded_artifacts
 
-      # 步骤 B: 上传到 GitHub Release
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          # 指定要上传的文件路径
-          # 这里使用通配符匹配所有下载下来的压缩包
           files: downloaded_artifacts/**/*.tar.gz
-          
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
