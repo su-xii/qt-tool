@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR" || exit
 
 # 执行启动命令
-qt --run -c config.toml
+./qt --run -c config.toml
 
 # 捕获退出状态码
 EXIT_CODE=$?
