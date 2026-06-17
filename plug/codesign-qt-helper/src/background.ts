@@ -40,7 +40,8 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.downloads.onCreated.addListener(async (downloadItem) => {
     console.log("download url",downloadItem.url)
     // 下载完成的不处理
-    if(!downloadItem.url.includes(TARGET_URL)) return
+    const isTargetUrl = TARGET_URL.find((domain) => downloadItem.url.includes(domain));
+    if(!isTargetUrl) return
     if(downloadItem.state === 'complete') return
 
     console.log('下载任务被创建:', downloadItem.id);
@@ -170,7 +171,8 @@ chrome.runtime.onMessage.addListener((message:PopupMessage, sender, sendResponse
 // 只对指定网站可用
 chrome.tabs.onActivated.addListener(async ({tabId})=>{
     const tab = await chrome.tabs.get(tabId);
-    const ok = tab.url?.includes(TARGET_URL);
+    const isTargetUrl = TARGET_URL.find((domain) => tab.url?.includes(domain));
+    const ok = !!isTargetUrl;
     if(ok){
         await chrome.action.enable(tabId)
     }else {

@@ -9,16 +9,10 @@
     "notifications",
     "tabs"
   ],
-  "host_permissions": [
-    "*://codesign.qq.com/*",
-    "*://*.codesign.qq.com/*"
-  ],
+  "host_permissions": ["__CONFIG_DOMAINS__"],
   "content_scripts": [
     {
-      "matches": [
-        "*://codesign.qq.com/*",
-        "*://*.codesign.qq.com/*"
-      ],
+      "matches": ["__CONFIG_DOMAINS__"],
       "js": ["content.js"]
     }
   ],
