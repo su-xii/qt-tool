@@ -1,4 +1,4 @@
-import {get,post} from "./request"
+import {get, post, upload} from "./request"
 import {ConfigsResponse} from "./reponse"
 
 
@@ -16,6 +16,14 @@ export function process(name:string,path:string,config_index:number):Promise<voi
         path,
         config_index
     })
+}
+
+export function uploadFile(name:string,fileBlob:Blob,config_index:number):Promise<void>{
+    const formData = new FormData();
+    formData.append('file', fileBlob);
+    formData.append('name', name);
+    formData.append('config_index', config_index.toString());
+    return upload<void>("/process/upload", formData);
 }
 
 export function checkFile(name:string,config_index:number):Promise<boolean>{

@@ -1,6 +1,6 @@
 [server]
 # 服务器配置
-addr = "127.0.0.1:9999"
+addr = "0.0.0.0:9999"
 
 [[output]]
 name = "测试codesign 安卓"

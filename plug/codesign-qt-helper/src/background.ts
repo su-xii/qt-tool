@@ -1,4 +1,4 @@
-import {process} from "./net/api"
+import {process, uploadFile} from "./net/api"
 import {PopupMessage} from "./message";
 import {getConfig} from "./store/config-store";
 import {getHistoryList, HistoryItem, HistoryList, saveHistoryList} from "./store/history-sotre";
@@ -12,7 +12,7 @@ async function main(){
 }
 
 // 定义下载任务类型
-type fn = () => void;
+type fn = () => void | Promise<void>;
 
 // 定义下载任务接口
 interface DownloadTask {
@@ -95,15 +95,31 @@ function executeUserAction(task: DownloadTask) {
 }
 
 // 处理popup交互请求
-function processPopupRequest(message:PopupMessage){
+async function processPopupRequest(message:PopupMessage){
     const downloadId = parseInt(message.downloadId)
     const task = downloadQueue[downloadId]
+    const config = await getConfig()
+    const mode = config?.mode ?? 'local'
+
     // 绑定用户操作，这里是为了防止下载过快，用户行为还没有绑定到下载任务
-    task.userAction = ()=>{
-        process(message.name,task.filePath!,message.configIndex)
-            .then(()=>handleMessage(message,task))
-            .catch((e)=>handleMessage(message,task,e))
-        // console.log("提交的参数:",message.name,task.filePath,message.configIndex)
+    task.userAction = async () => {
+        try {
+            if (mode === 'remote') {
+                // 远程模式：读取文件二进制流并上传
+                const response = await fetch(`file://${task.filePath!}`);
+                if (!response.ok) {
+                    throw new Error(`读取文件失败: ${response.statusText}。请检查 manifest.json 中的 file:///* 权限。`);
+                }
+                const blob = await response.blob();
+                await uploadFile(message.name, blob, message.configIndex);
+            } else {
+                // 本地模式：传递文件路径
+                await process(message.name, task.filePath!, message.configIndex);
+            }
+            handleMessage(message, task);
+        } catch (e) {
+            handleMessage(message, task, e instanceof Error ? e : new Error(String(e)));
+        }
     }
 
     if(task.status === 'completed'){

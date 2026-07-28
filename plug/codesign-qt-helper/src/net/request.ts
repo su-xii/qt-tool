@@ -66,6 +66,16 @@ export async function post<T = any>(url: string, data?: any, config?: RequestCon
   return res.data.data;
 }
 
+// 上传文件（FormData multipart）
+export async function upload<T = any>(url: string, formData: FormData): Promise<T> {
+    await handleConfigServer();
+    const res = await instance.post<ApiResponse<T>>(url, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return res.data.data;
+}
 
 // 导出实例（用于扩展）
 export { instance };

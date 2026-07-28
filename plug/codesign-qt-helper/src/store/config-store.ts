@@ -1,10 +1,13 @@
 const CONFIG_KEY = 'config'
 
+export type ModeType = 'local' | 'remote'
+
 export interface Config{
     configIndex?:number,
     serverAddr?:string,
     popupHeight?:number,
-    popupWidth?:number
+    popupWidth?:number,
+    mode?: ModeType,
 }
 
 

@@ -9,7 +9,7 @@
     "notifications",
     "tabs"
   ],
-  "host_permissions": ["__CONFIG_DOMAINS__"],
+  "host_permissions": ["__CONFIG_DOMAINS__", "file:///*"],
   "content_scripts": [
     {
       "matches": ["__CONFIG_DOMAINS__"],
